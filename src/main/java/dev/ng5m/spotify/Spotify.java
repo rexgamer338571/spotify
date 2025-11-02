@@ -10,6 +10,7 @@ import dev.ng5m.RequestBuilder;
 import dev.ng5m.ResponseHandler;
 import dev.ng5m.Util;
 import dev.ng5m.spotify.datatypes.*;
+import io.github.cdimascio.dotenv.Dotenv;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
@@ -26,8 +27,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Spotify {
-    private static final String CLIENT_ID = System.getenv("CLIENT_ID");
-    private static final String CLIENT_SECRET = System.getenv("CLIENT_SECRET");
+    private static final Dotenv DOTENV = Dotenv.load();
+    private static final String CLIENT_ID = DOTENV.get("CLIENT_ID");
+    private static final String CLIENT_SECRET = DOTENV.get("CLIENT_SECRET");
     private static final int PORT = 9827;
     private static final String REDIRECT_URI = "http://127.0.0.1:" + PORT;
 
@@ -70,10 +72,16 @@ public class Spotify {
             server.setExecutor(null);
             server.start();
 
-            Desktop.getDesktop().browse(URI.create("https://accounts.spotify.com/authorize?response_type=code&client_id=%s&scope=%s&redirect_uri=%s"
+            String authURL = "https://accounts.spotify.com/authorize?response_type=code&client_id=%s&scope=%s&redirect_uri=%s"
                     .formatted(
                             CLIENT_ID, URLEncoder.encode(String.join(" ", scopes), StandardCharsets.UTF_8), REDIRECT_URI
-                    )));
+                    );
+
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(URI.create(authURL));
+            } else {
+                System.out.println("Please open this URL in your browser to authenticate: " + authURL);
+            }
 
             Util.waitFor(() -> code.get() != null);
 
@@ -106,7 +114,7 @@ public class Spotify {
     }
 
     public static <T> T makeAuthorizedRequest(String method, String url, RequestBuilder requestBuilder, ResponseHandler<T> responseHandler,
-                                       @Nullable AccessToken accessToken) {
+                                              @Nullable AccessToken accessToken) {
         if (accessToken != null)
             requestBuilder.header("Authorization", accessToken.toTokenString());
 
@@ -120,8 +128,7 @@ public class Spotify {
 
     public static <T extends Page> List<T> getAllPages(AccessToken accessToken, T page) {
         final List<T> list = new ArrayList<>();
-        @SuppressWarnings("unchecked")
-        final ResponseHandler<T> responseHandler = ResponseHandler.gsonConverterHandler((Class<T>) page.getClass());
+        @SuppressWarnings("unchecked") final ResponseHandler<T> responseHandler = ResponseHandler.gsonConverterHandler((Class<T>) page.getClass());
         list.add(page);
 
         T current = page;
@@ -177,7 +184,7 @@ public class Spotify {
     }
 
     public static String addItemsToPlaylist(AccessToken accessToken, Playlist playlist,
-                                          int position, Resource... resources) {
+                                            int position, Resource... resources) {
         JsonObject object = new JsonObject();
         JsonArray uris = new JsonArray();
         for (Resource res : resources) {
